@@ -33,7 +33,7 @@ def objects_to_grid(objects, spacing):
 
 
 def placeholder_locs(
-    terrain, overall_density, selection, distance_min=0, altitude=0.0, max_locs=None, xy_radius=None
+    terrain, overall_density, selection, distance_min=0, altitude=0.0, max_locs=None
 ):
     temp_vert = butil.spawn_vert("compute_placeholder_locations")
     geo = temp_vert.modifiers.new(name="GEOMETRY", type="NODES")
@@ -70,10 +70,6 @@ def placeholder_locs(
 
     butil.delete(temp_vert)
 
-    if xy_radius is not None and len(locations) > 0:
-        xy_dists = np.sqrt(locations[:, 0] ** 2 + locations[:, 1] ** 2)
-        locations = locations[xy_dists <= xy_radius]
-
     np.random.shuffle(locations)
 
     return locations
@@ -104,11 +100,10 @@ def scatter_placeholders_mesh(
     selection=None,
     distance_min=0,
     num_placeholders=None,
-    xy_radius=None,
     **kwargs,
 ):
     locations = placeholder_locs(
-        base_mesh, overall_density, selection, distance_min=distance_min, xy_radius=xy_radius, **kwargs
+        base_mesh, overall_density, selection, distance_min=distance_min, **kwargs
     )
     if num_placeholders is not None:
         np.random.shuffle(locations)
@@ -140,9 +135,7 @@ def get_placeholder_points(obj: bpy.types.Object) -> np.ndarray:
         return butil.apply_matrix_world(obj, verts)
     elif obj.type == "EMPTY" and obj.empty_display_type == "CUBE":
         extent = obj.empty_display_size * np.array([-1, 1])
-        # meshgrid yields three (2,2,2) arrays; reshape to (8,3) so downstream
-        # code sees the expected (N, 3) shape (e.g. compute_inview_distances assertion)
-        verts = np.stack(np.meshgrid(extent, extent, extent), axis=-1).reshape(-1, 3)
+        verts = np.stack(np.meshgrid(extent, extent, extent), axis=-1)
         return butil.apply_matrix_world(obj, verts)
     else:
         return np.array([obj.matrix_world.translation]).reshape(1, 3)

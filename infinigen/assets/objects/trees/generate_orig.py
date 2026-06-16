@@ -49,6 +49,9 @@ logger = logging.getLogger(__name__)
 
 @gin.configurable
 class GenericTreeFactory(AssetFactory):
+    scale = (
+        0.35  # trees are defined in weird units currently, need converting to meters
+    )
 
     def __init__(
         self,
@@ -64,11 +67,9 @@ class GenericTreeFactory(AssetFactory):
         decimate_placeholder_levels=0,
         min_dist=None,
         coarse=False,
-        scale=0.35,  # trees are defined in weird units currently, need converting to meters
     ):
         super(GenericTreeFactory, self).__init__(factory_seed, coarse=coarse)
 
-        self.scale = scale
         self.genome = genome
         self.child_col = child_col
         self.trunk_surface = trunk_surface

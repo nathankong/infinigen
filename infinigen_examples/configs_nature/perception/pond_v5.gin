@@ -1,0 +1,286 @@
+# pond_v5.gin
+#
+# Pond scene for spatial perception odd-one-out experiment.
+# Scene identity is the manipulation: two views of the same scene (same seed)
+# are the "match", one view of a different scene (different seed) is the odd
+# one out. Participants use holistic terrain/water shape cues.
+#
+# Usage:
+#
+#   python generate_nature.py \
+#     --output_folder outputs/pond_v5_test \
+#     -s 42 \
+#     -t coarse populate \
+#     -g scene_types/plain.gin \
+#        performance/dev.gin \
+#        perception/pond_v5.gin \
+#     -p "run_erosion.n_iters=[0,0]"
+
+# ─── Scene scale ──────────────────────────────────────────────────────────────
+# populated_bounds: 80m terrain mesh for a natural horizon (no fine_terrain).
+# dist_cull=25: limits assets to within 25m of populate_origin.
+# populate_origin: fixed point used as the asset placement camera — assets
+#   populate within dist_cull meters of this point, independent of the auto
+#   camera. Outer 40-80m ring has bare terrain only, keeping file size small.
+Terrain.populated_bounds = (-25, 25, -25, 25, -2, 20)
+Terrain.bounds = (-30, 30, -30, 30, -3, 25)
+populate_scene.populate_origin = (0, 0, 0)
+
+# dist_cull: during populate, only placeholders within this many meters of
+#   populate_origin get actual 3D geometry. Should match scatter_radius so every
+#   scattered placeholder receives geometry. Active and required.
+placement.populate_all.dist_cull = 5
+
+# inview_distance / near_distance / center_distance: build auto-camera-clipped
+#   terrain submeshes (terrain_inview, terrain_near, terrain_center) used as
+#   scatter targets for creatures, fish, corals, etc. All those stages are at
+#   0 chance in this config, so these submeshes are computed but never used.
+#   Kept here to avoid gin "unknown binding" errors from dev.gin overrides.
+compose_nature.inview_distance = 5
+compose_nature.near_distance = 5
+compose_nature.center_distance = 5
+
+# ─── Terrain elements ─────────────────────────────────────────────────────────
+scene.ground_chance = 1.0
+# For this config, keep it ground only
+scene.landtiles_chance = 0
+scene.waterbody_chance = 0
+scene.warped_rocks_chance = 0
+scene.voronoi_rocks_chance = 0
+scene.caves_chance = 0
+
+# ─── Terrain materials ────────────────────────────────────────────────────────
+# Forest soil / dirt / cracked ground, matching forest.gin material selection.
+Terrain.ground_collection = [
+    ("infinigen.assets.materials.terrain.soil.Soil", 1),
+]
+Terrain.mountain_collection = [
+    ("infinigen.assets.materials.terrain.dirt.Dirt", 1),
+]
+
+# ─── Ground SDF ───────────────────────────────────────────────────────────────
+# Perlin noise floor texture laid under the LandTiles walls. Kept low-amplitude
+# so the LandTiles shape dominates the large-scale scene structure.
+#
+# freq:     spatial frequency of the noise. Higher = smaller, tighter features.
+#           1/freq ≈ wavelength in meters. 0.5 → ~2m features (fine pebbled
+#           texture); 0.1 → ~10m features (broad undulation). Default: 0.01.
+#           [ODD-ONE-OUT: changes surface texture character across seeds]
+#
+# scale:    vertical amplitude in meters (peak-to-peak height variation).
+#           0.1 = nearly flat (10cm); 1.0 = 1m of undulation. Keep low so
+#           ground texture doesn't compete with LandTiles walls. Default: 5.
+#
+# octaves:  number of Perlin noise layers summed together. More octaves adds
+#           finer detail on top of the base frequency. 4 = smooth; 9 = very
+#           detailed/rough. Default: 9.
+#
+# height:   global vertical offset of the ground plane in meters. Shifts the
+#           entire ground surface up or down. Default: 0.
+#
+# with_sand_dunes: set to 1 to add sand dune shapes on top of the ground.
+#           Controlled by sand_dunes_* params below. Default: 0.
+
+Ground.freq = 0.15
+Ground.scale = 1
+Ground.octaves = 4
+Ground.height = 0.0
+#Ground.with_sand_dunes = 1
+
+# ─── LandTiles ────────────────────────────────────────────────────────────────
+# Pre-baked terrain tile assets arranged in a 1D strip along one axis.
+# ["Mountain", "River", "Mountain"] places walls on both sides of a central
+# valley, creating the pond bowl shape.
+#
+# tiles:        ordered list of tile types along the arrangement axis. Valid
+#               types: "Mountain", "River", "Cliff", "Canyon", "Canyons",
+#               "Mesa", "Coast", "MultiMountains", "Volcano". The list length
+#               determines how many tiles are placed side by side.
+#               [ODD-ONE-OUT: changing tile types changes wall character]
+#
+# tile_heights: target height (meters) for each tile, matched 1:1 with tiles.
+#               Positive = above z=0 (walls); negative = below z=0 (valley
+#               floor). [2.5, -0.5, 2.5] = tall walls; [1.0, -0.3, 1.0] =
+#               shallow bowl. [ODD-ONE-OUT: controls bowl depth/wall height]
+#
+# tile_density: scales how tightly tiles are packed along the axis. Higher =
+#               features compressed into a smaller footprint, steeper slopes.
+#               Tune to match populated_bounds scale. Default: 1.
+#               [ODD-ONE-OUT: changes slope steepness]
+#
+# randomness:   Voronoi cell irregularity of tile boundaries. 0 = perfectly
+#               regular/symmetric; 1 = fully random placement. Higher values
+#               make walls look more organic and uneven. Default: 0.
+#               [ODD-ONE-OUT: main lever for wall shape variation across seeds]
+#
+# direction_deg: rotation of the tile arrangement axis in degrees. 0 = tiles
+#               run along the X axis (walls face Y); 90 = walls face X.
+#               Default: 0.
+#
+# n_lattice:    repeats the 1D tile pattern N times with different seeds along
+#               the same axis (does NOT add a perpendicular axis). Rarely
+#               useful for a simple bowl; leave at 1. Default: 1.
+#
+# y_tilt:       tilts the entire LandTiles surface along the Y axis (radians).
+#               Creates an asymmetric bowl, higher on one side. Default: 0.
+#
+# smooth:       if True, smooths tile boundary transitions. Default: False.
+
+#LandTiles.tiles = ["Mountain", "River", "Mountain"]
+#LandTiles.tile_heights = [0.5, -0.3, 0.5]
+#LandTiles.tile_density = 1.8
+
+# Desert-like
+LandTiles.tiles = ["Coast"]
+LandTiles.tile_heights = [0]
+LandTiles.tile_density = 1
+#multi_mountains_params.height = 7
+#multi_mountains_params.min_freq = ("uniform", 0.03, 0.05)
+#multi_mountains_params.max_freq = ("uniform", 0.08, 0.1)
+
+LandTiles.randomness = 0.8
+LandTiles.direction_deg = 0
+LandTiles.n_lattice = 1
+LandTiles.y_tilt = 0
+LandTiles.smooth = False
+
+# on_the_fly_instances: how many independent heightmap variants to pre-bake per
+# tile type. Default 5 means 5 Mountain + 5 River assets are generated (10 total),
+# each running erosion + snowfall simulations. Set to 1 for rapid prototyping.
+# NOTE: assets are cached in outputs/SCENE/assets/ — only regenerated on first run
+# or after clearing the outputs folder.
+#LandTiles.load_assets.on_the_fly_instances = 1
+
+# ant_landscape_asset.snowfall: pre-baking the snowfall heightmap variant costs
+# ~20s per tile instance (landlab diffusion simulation) and is unrelated to scene
+# snow weather effects (snow_particles_chance=0 above). Disable for prototyping.
+#ant_landscape_asset.snowfall = False
+
+# ─── Waterbody ────────────────────────────────────────────────────────────────
+# Flat water plane at a fixed z height. Fills wherever terrain SDF is above
+# this height (i.e. terrain dips below the water surface).
+#
+# height:   z coordinate of the water surface in meters. Higher = more terrain
+#           submerged, larger water area visible. Should be between the valley
+#           floor height (tile_heights[1] = -0.3) and wall height (1.0) to
+#           produce a partially filled bowl. Default: 0.
+#           [ODD-ONE-OUT: changing height changes how much water is visible]
+
+Waterbody.height = 0.2
+
+# ─── Mesh resolution ──────────────────────────────────────────────────────────
+# subdivisions: number of coarse voxels along X (Y and Z auto-computed to match
+#   voxel size). Higher = finer mesh, captures smaller surface features, but
+#   costs more memory and generation time. For a 20m scene:
+#     64  → 31cm voxels (default, fast iteration)
+#     128 → 15cm voxels (recommended for smooth walls)
+#     256 → 7.8cm voxels (high quality, ~64x slower than 64)
+UniformMesher.subdivisions = (256, -1, -1)
+
+# NOTE: frustum culling for trees/boulders/bushes is disabled via vis_cull=None
+# passed explicitly in generate_nature.py's populate lambdas (NOT via this gin
+# binding). vis_cull=0 here would mean "strict frustum only", which populates
+# nothing when trees are outside the auto camera's view. vis_cull=None skips
+# the frustum check entirely — all placeholders within dist_cull get geometry.
+# This gin binding has no effect on trees/boulders/bushes (explicit kwarg wins).
+placement.populate_all.vis_cull = 0
+
+# ─── Lighting ─────────────────────────────────────────────────────────────────
+# Reduce sun harshness so tree/asset colours are visible in renders.
+# strength: overall sky brightness multiplier (default ~0.2)
+# sun_elevation: degrees above horizon; capped at 50 to avoid straight-down sun
+# sun_intensity: brightness of the sun disk itself (default ~0.9)
+nishita_lighting.strength = 0.10
+nishita_lighting.sun_elevation = ("clip_gaussian", 45, 10, 30, 60)
+nishita_lighting.sun_intensity = 0.2
+
+# ─── Seasons ───────────────────────────────────────────────────────────────────
+random_season.weights = {'autumn': 1, 'summer': 1, 'spring': 0, 'winter': 0}
+
+# ─── Camera ───────────────────────────────────────────────────────────────────
+compose_nature.camera_selection_tags_ratio = {}
+compose_nature.camera_selection_ranges_ratio = {
+    "altitude": ("altitude", -1e9, 0.4, 0.0, 1)
+}
+camera.camera_pose_proposal.altitude = ("clip_gaussian", 1.2, 0.3, 0.8, 1.6)
+camera.camera_pose_proposal.pitch = ("clip_gaussian", 94, 8, 82, 110)
+
+camera.spawn_camera_rigs.camera_rig_config = [
+    {'loc': (0, 0, 0), 'rot_euler': (0, 0, 0)},
+]
+
+# ─── Assets ───────────────────────────────────────────────────────────────────
+# Static assets are safe for the odd-one-out task: they are baked into the
+# blend file at fixed positions, so both views of the same scene show the same
+# trees/rocks from different angles. Only animated creatures are excluded.
+
+# nonliving_domain_tags: exclude liquid_covered so rocks/boulders don't spawn
+#   on submerged terrain (default 'landscape,-cave' omits this exclusion).
+compose_nature.nonliving_domain_tags = 'landscape,-cave'
+
+# compose_nature.params sub-dict is accessible as params["params"] inside compose_nature;
+# individual direct bindings below inject each key at the top level of **params so
+# params.get("key") works in add_trees / add_boulders / add_grass etc.
+compose_nature.scatter_radius = 12         # XY radius (meters) from origin — hard limit on placeholder scatter
+
+compose_nature.boulder_density = 0.05
+compose_nature.max_boulder_species = 5
+compose_nature.boulder_select_scale = 0.2
+compose_nature.boulder_select_thresh = 0.3
+compose_nature.rocks_chance = 0.5
+compose_nature.boulders_chance = 0.8
+compose_nature.glowing_rocks_chance = 0.0
+
+# Vegetation: natural pond-side plants enabled
+# tree_density and max_tree_species are explicit to avoid sparse results in small 20m bounds
+GenericTreeFactory.scale = 0.15 # smaller = smaller scale trees
+compose_nature.tree_select_scale = 0.1 # smaller = more uniform
+compose_nature.trees_chance = 1.0
+compose_nature.tree_density = 0.08
+compose_nature.cactus_chance = 0.7
+compose_nature.max_tree_species = 5
+compose_nature.bushes_chance = 0.3
+compose_nature.instanced_trees_chance = 0.0
+compose_nature.ground_leaves_chance = 0.0
+compose_nature.ground_twigs_chance = 0.0
+compose_nature.chopped_trees_chance = 0.0
+compose_nature.grass_chance = 0.0
+compose_nature.ferns_chance = 0.7
+compose_nature.monocots_chance = 0.0
+compose_nature.flowers_chance = 0.0
+compose_nature.pinecone_chance = 0.0
+compose_nature.pine_needle_chance = 0.0
+compose_nature.decorative_plants_chance = 0.0
+compose_nature.mushroom_chance = 0.0
+
+# Atmosphere / weather: all off
+compose_nature.clouds_chance = 0.0
+compose_nature.fancy_clouds_chance = 0.0
+compose_nature.wind_chance = 0.0
+compose_nature.turbulence_chance = 0.0
+compose_nature.rain_particles_chance = 0.0
+compose_nature.snow_particles_chance = 0.0
+compose_nature.leaf_particles_chance = 0.0
+compose_nature.dust_particles_chance = 0.0
+compose_nature.marine_snow_particles_chance = 0.0
+compose_nature.camera_based_lighting_chance = 0.0
+
+# Creatures: all off
+compose_nature.ground_creatures_chance = 0.0
+compose_nature.flying_creatures_chance = 0.0
+
+# Surface details: all off
+populate_scene.slime_mold_chance = 0.0
+populate_scene.ivy_chance = 0.0
+populate_scene.lichen_chance = 0.0
+populate_scene.mushroom_chance = 0.0
+populate_scene.moss_chance = 0.0
+populate_scene.snow_layer_chance = 0.0
+
+# ─── Render quality ───────────────────────────────────────────────────────────
+execute_tasks.generate_resolution = (960, 960)
+get_sensor_coords.H = 960
+get_sensor_coords.W = 960
+configure_render_cycles.min_samples = 32
+configure_render_cycles.num_samples = 512
+configure_render_cycles.adaptive_threshold = 0.05

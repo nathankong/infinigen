@@ -61,7 +61,6 @@ def placement_mask(
     tag=None,
     return_scalar=False,
     altitude_range=None,
-    xy_radius=None,
 ):
     def selection(nw):
         mask = nw.new_node(Nodes.Value)
@@ -107,19 +106,6 @@ def placement_mask(
                     input_args=[z, end],
                 ),
             )
-        if xy_radius is not None:
-            sep = nw.new_node(Nodes.SeparateXYZ, [nw.new_node(Nodes.InputPosition)])
-            x = (sep, 0)
-            y = (sep, 1)
-            x2 = nw.new_node(Nodes.Math, input_args=[x, x], attrs={"operation": "MULTIPLY"})
-            y2 = nw.new_node(Nodes.Math, input_args=[y, y], attrs={"operation": "MULTIPLY"})
-            dist2 = nw.new_node(Nodes.Math, input_args=[x2, y2], attrs={"operation": "ADD"})
-            in_radius = nw.new_node(
-                Nodes.Compare,
-                attrs={"operation": "LESS_THAN", "data_type": "FLOAT"},
-                input_args=[dist2, float(xy_radius) ** 2],
-            )
-            mask = nw.scalar_multiply(mask, in_radius)
         if (select_thresh is not None) and return_scalar:
             map_range = nw.new_node(
                 Nodes.MapRange,

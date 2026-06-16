@@ -7,6 +7,51 @@
 import shapely
 
 
+def square_dining_room(factory_seed):
+    # 6m × 6m single dining room with windows on all four walls.
+    return {
+        "rooms": {
+            "dining-room_0/0": {"shape": shapely.box(0, 0, 6, 6)},
+        },
+        "windows": {
+            "window":     {"shape": shapely.LineString([(0.0, 1.5), (0.0, 4.5)])},
+            "window.001": {"shape": shapely.LineString([(6.0, 1.5), (6.0, 4.5)])},
+            "window.002": {"shape": shapely.LineString([(1.5, 0.0), (4.5, 0.0)])},
+            "window.003": {"shape": shapely.LineString([(1.5, 6.0), (4.5, 6.0)])},
+        },
+    }
+
+
+def square_living_room(factory_seed):
+    # 6m × 6m single living room with one window per wall.
+    return {
+        "rooms": {
+            "living-room_0/0": {"shape": shapely.box(0, 0, 6, 6)},
+        },
+        "windows": {
+            "window":     {"shape": shapely.LineString([(0.0, 1.5), (0.0, 4.5)])},
+            "window.001": {"shape": shapely.LineString([(6.0, 1.5), (6.0, 4.5)])},
+            "window.002": {"shape": shapely.LineString([(1.5, 0.0), (4.5, 0.0)])},
+            "window.003": {"shape": shapely.LineString([(1.5, 6.0), (4.5, 6.0)])},
+        },
+    }
+
+
+def square_bedroom(factory_seed):
+    # 6m × 6m single bedroom with one window per wall.
+    return {
+        "rooms": {
+            "bedroom_0/0": {"shape": shapely.box(0, 0, 6, 6)},
+        },
+        "windows": {
+            "window":     {"shape": shapely.LineString([(0.0, 1.5), (0.0, 4.5)])},
+            "window.001": {"shape": shapely.LineString([(6.0, 1.5), (6.0, 4.5)])},
+            "window.002": {"shape": shapely.LineString([(1.5, 0.0), (4.5, 0.0)])},
+            "window.003": {"shape": shapely.LineString([(1.5, 6.0), (4.5, 6.0)])},
+        },
+    }
+
+
 def example(factory_seed):
     return {
         "rooms": {

@@ -280,7 +280,11 @@ class Terrain:
                 elif mesher_backend == "OcMesher":
                     mesher = OcMesher(cameras, self.bounds)
                 elif mesher_backend == "UniformMesher":
-                    mesher = UniformMesher(self.populated_bounds)
+                    # [PATCH] use self.bounds so the coarse mesh covers
+                    # the full Terrain.bounds (not just populated_bounds), allowing
+                    # background features (e.g. mountains) to appear without fine_terrain.
+                    # mesher = UniformMesher(self.populated_bounds)
+                    mesher = UniformMesher(self.bounds)
                 else:
                     raise ValueError("unrecognized mesher_backend")
                 with Timer(f"meshing {TerrainNames.OpaqueTerrain}"):
@@ -315,7 +319,9 @@ class Terrain:
                             **special_args,
                         )
                 elif mesher_backend == "UniformMesher":
-                    mesher = UniformMesher(self.populated_bounds, enclosed=True)
+                    # [PATCH] see note above (OpaqueTerrain block).
+                    # mesher = UniformMesher(self.populated_bounds, enclosed=True)
+                    mesher = UniformMesher(self.bounds, enclosed=True)
                 else:
                     raise ValueError("unrecognized mesher_backend")
                 with Timer(f"meshing {element.__class__.name}"):
@@ -341,7 +347,9 @@ class Terrain:
                         cameras, self.bounds, simplify_occluded=False
                     )
                 elif mesher_backend == "UniformMesher":
-                    mesher = UniformMesher(self.populated_bounds)
+                    # [PATCH] see note above (OpaqueTerrain block).
+                    # mesher = UniformMesher(self.populated_bounds)
+                    mesher = UniformMesher(self.bounds)
                 else:
                     raise ValueError("unrecognized mesher_backend")
                 with Timer(f"meshing {TerrainNames.CollectiveTransparentTerrain}"):

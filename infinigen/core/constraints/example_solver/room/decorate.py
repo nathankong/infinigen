@@ -208,13 +208,23 @@ pillar_rooms = {
 
 
 def room_walls(walls: list[bpy.types.Object], constants: RoomConstants, n_walls=3):
+    # PATCH: sort by name so that wall_fns construction order and the for-w-in-walls loop
+    # below are both deterministic across runs. Blender collection ordering depends on
+    # insertion order which can vary with heap state between process runs.
+    walls = sorted(walls, key=lambda w: w.name)
     wall_fns = list(weighted_sample(room_wall_fns[room_type(r.name)])() for r in walls)
     logger.debug(
         f"{room_walls.__name__} adding materials to {len(walls)=}, using {len(wall_fns)=}"
     )
 
     kwargs = dict(vertical=True, is_ceramic=True, alternating=False, shape="square")
-    for wall_fn in set(wall_fns):
+    # PATCH: sort by (class name, construction index) for fully deterministic iteration.
+    # Class name alone doesn't break ties when multiple walls share the same material class;
+    # Python sorted() is stable but the input set() order is still non-deterministic for
+    # equal-key elements, so we use the position in wall_fns (now deterministic since walls
+    # is sorted by name above) as the tiebreaker.
+    fn_idx = {id(fn): i for i, fn in enumerate(wall_fns)}
+    for wall_fn in sorted(set(wall_fns), key=lambda f: (f.__class__.__name__, fn_idx[id(f)])):
         shape = np.random.choice(["square", "rectangle", "hexagon"])
         kwargs = dict(vertical=True, alternating=False, shape=shape)
         rooms_ = [o for o, w in zip(walls, wall_fns) if w == wall_fn]
@@ -303,12 +313,16 @@ def room_walls(walls: list[bpy.types.Object], constants: RoomConstants, n_walls=
 
 
 def room_ceilings(ceilings):
+    # PATCH: sort by name for deterministic construction order (see room_walls patch).
+    ceilings = sorted(ceilings, key=lambda c: c.name)
     logger.debug(f"{room_ceilings.__name__} adding materials to {len(ceilings)=}")
 
     ceiling_fns = list(
         weighted_sample(room_ceiling_fns[room_type(r.name)])() for r in ceilings
     )
-    for ceiling_fn in set(ceiling_fns):
+    fn_idx = {id(fn): i for i, fn in enumerate(ceiling_fns)}
+    # PATCH: sort by (class name, construction index) for fully deterministic iteration (see room_walls patch).
+    for ceiling_fn in sorted(set(ceiling_fns), key=lambda f: (f.__class__.__name__, fn_idx[id(f)])):
         rooms_ = [o for o, f in zip(ceilings, ceiling_fns) if f == ceiling_fn]
         if ceiling_fn.__class__.__name__ == "Plaster":
             for r in rooms_:
@@ -319,6 +333,8 @@ def room_ceilings(ceilings):
 
 
 def room_floors(floors, n_floors=3):
+    # PATCH: sort by name for deterministic construction order (see room_walls patch).
+    floors = sorted(floors, key=lambda f: f.name)
     floor_material_gens = []
     for r in floors:
         gen_class = weighted_sample(room_floor_fns[room_type(r.name)])
@@ -328,7 +344,9 @@ def room_floors(floors, n_floors=3):
         f"{room_floors.__name__} adding materials to {len(floors)=}, using {len(floor_material_gens)=}"
     )
 
-    for floor_fn in set(floor_material_gens):
+    fn_idx = {id(fn): i for i, fn in enumerate(floor_material_gens)}
+    # PATCH: sort by (class name, construction index) for fully deterministic iteration (see room_walls patch).
+    for floor_fn in sorted(set(floor_material_gens), key=lambda f: (f.__class__.__name__, fn_idx[id(f)])):
         rooms_ = [o for o, f in zip(floors, floor_material_gens) if f == floor_fn]
         indices = np.random.randint(0, n_floors, len(rooms_))
         for i in range(n_floors):

@@ -123,9 +123,8 @@ def compose_nature(output_folder, scene_seed, **params):
             return {
                 "density": params.get("tree_density", uniform(0.045, 0.15))
                 / n_tree_species,
-                "distance_min": params.get("tree_distance_min", uniform(1, 2.5)),
-                "select_scale": params.get("tree_select_scale", uniform(0.03, 0.3)),
-                "select_thresh": params.get("tree_select_thresh", 0.55),
+                "distance_min": uniform(1, 2.5),
+                "select_scale": uniform(0.03, 0.3),
             }
 
         return [tree_params() for _ in range(n_tree_species)]
@@ -135,25 +134,22 @@ def compose_nature(output_folder, scene_seed, **params):
     )
 
     def add_trees(terrain_mesh):
-        scatter_radius = params.get("scatter_radius", None)
-        for i, species_params in enumerate(tree_species_params):
+        for i, params in enumerate(tree_species_params):
             fac = trees.TreeFactory(np.random.randint(1e7), coarse=True)
-            selection = density.placement_mask(species_params["select_scale"], select_thresh=species_params["select_thresh"], tag=land_domain, xy_radius=scatter_radius)
+            selection = density.placement_mask(params["select_scale"], tag=land_domain)
             placement.scatter_placeholders_mesh(
                 terrain_mesh,
                 fac,
                 selection=selection,
                 altitude=-0.1,
-                overall_density=species_params["density"],
-                distance_min=species_params["distance_min"],
-                xy_radius=scatter_radius,
+                overall_density=params["density"],
+                distance_min=params["distance_min"],
             )
 
     p.run_stage("trees", add_trees, terrain_mesh)
 
     def add_bushes(terrain_mesh):
         n_bush_species = randint(1, params.get("max_bush_species", 2) + 1)
-        scatter_radius = params.get("scatter_radius", None)
         for i in range(n_bush_species):
             spec_density = (
                 params.get("bush_density", uniform(0.03, 0.12)) / n_bush_species
@@ -164,7 +160,6 @@ def compose_nature(output_folder, scene_seed, **params):
                 normal_thresh=0.3,
                 select_thresh=uniform(0.5, 0.6),
                 tag=land_domain,
-                xy_radius=scatter_radius,
             )
             placement.scatter_placeholders_mesh(
                 terrain_mesh,
@@ -172,7 +167,6 @@ def compose_nature(output_folder, scene_seed, **params):
                 altitude=-0.05,
                 overall_density=spec_density,
                 distance_min=uniform(0.05, 0.3),
-                xy_radius=scatter_radius,
                 selection=selection,
             )
 
@@ -188,13 +182,9 @@ def compose_nature(output_folder, scene_seed, **params):
 
     def add_boulders(terrain_mesh):
         n_boulder_species = randint(1, params.get("max_boulder_species", 5))
-        scatter_radius = params.get("scatter_radius", None)
         for i in range(n_boulder_species):
             selection = density.placement_mask(
-                params.get("boulder_select_scale", 0.05),
-                tag=nonliving_domain,
-                select_thresh=params.get("boulder_select_thresh", uniform(0.55, 0.6)),
-                xy_radius=scatter_radius,
+                0.05, tag=nonliving_domain, select_thresh=uniform(0.55, 0.6)
             )
             fac = rocks.BoulderFactory(int_hash((scene_seed, i)), coarse=True)
             placement.scatter_placeholders_mesh(
@@ -204,7 +194,6 @@ def compose_nature(output_folder, scene_seed, **params):
                 / n_boulder_species,
                 selection=selection,
                 altitude=-0.25,
-                xy_radius=scatter_radius,
             )
 
     p.run_stage("boulders", add_boulders, terrain_mesh)
@@ -431,7 +420,7 @@ def compose_nature(output_folder, scene_seed, **params):
         collider_col = butil.get_collection("colliders")
         butil.put_in_collection(collider, collider_col)
 
-        # butil.modify_mesh(terrain_near, "SUBSURF", levels=2, apply=True)  # disabled: causes non-uniform terrain resolution near auto camera
+        butil.modify_mesh(terrain_near, "SUBSURF", levels=2, apply=True)
 
         deps = bpy.context.evaluated_depsgraph_get()
         terrain_inview_bvh = mathutils.bvhtree.BVHTree.FromObject(terrain_inview, deps)
@@ -487,25 +476,22 @@ def compose_nature(output_folder, scene_seed, **params):
         _, rock_col = pebbles.Pebbles().apply(target, selection=selection)
         return rock_col
 
-    p.run_stage("rocks", add_rocks, terrain_mesh)
+    p.run_stage("rocks", add_rocks, terrain_inview)
 
     def add_ground_leaves(target):
-        scatter_radius = params.get("scatter_radius", None)
         selection = density.placement_mask(
             scale=0.1,
             select_thresh=0.52,
             normal_thresh=0.7,
             return_scalar=True,
             tag=land_domain,
-            xy_radius=scatter_radius,
         )
         # ground_leaves.apply(target, selection=selection, season=season)
         ground_leaves.GroundLeaves().apply(target, selection=selection, season=season)
 
-    p.run_stage("ground_leaves", add_ground_leaves, terrain_mesh, prereq="trees")
+    p.run_stage("ground_leaves", add_ground_leaves, terrain_near, prereq="trees")
 
     def add_ground_twigs(target):
-        scatter_radius = params.get("scatter_radius", None)
         use_leaves = uniform() < 0.5
         selection = density.placement_mask(
             scale=0.15,
@@ -513,29 +499,26 @@ def compose_nature(output_folder, scene_seed, **params):
             normal_thresh=0.7,
             return_scalar=True,
             tag=nonliving_domain,
-            xy_radius=scatter_radius,
         )
         # ground_twigs.apply(target, selection=selection, use_leaves=use_leaves)
         ground_twigs.GroundTwigs().apply(
             target, selection=selection, use_leaves=use_leaves
         )
 
-    p.run_stage("ground_twigs", add_ground_twigs, terrain_mesh)
+    p.run_stage("ground_twigs", add_ground_twigs, terrain_near)
 
     def add_chopped_trees(target):
-        scatter_radius = params.get("scatter_radius", None)
         selection = density.placement_mask(
             scale=0.15,
             select_thresh=uniform(0.55, 0.6),
             normal_thresh=0.7,
             return_scalar=True,
             tag=nonliving_domain,
-            xy_radius=scatter_radius,
         )
         # chopped_trees.apply(target, selection=selection)
         chopped_trees.ChoppedTrees().apply(target, selection=selection)
 
-    p.run_stage("chopped_trees", add_chopped_trees, terrain_mesh)
+    p.run_stage("chopped_trees", add_chopped_trees, terrain_inview)
 
     def add_grass(target):
         select_max = params.get("grass_select_max", 0.5)
@@ -549,55 +532,49 @@ def compose_nature(output_folder, scene_seed, **params):
         # grass.apply(target, selection=selection)
         grass.Grass().apply(target, selection=selection)
 
-    p.run_stage("grass", add_grass, terrain_mesh)
+    p.run_stage("grass", add_grass, terrain_inview)
 
     def add_monocots(target):
-        scatter_radius = params.get("scatter_radius", None)
         selection = density.placement_mask(
-            normal_dir=(0, 0, 1), scale=0.2, tag=land_domain, xy_radius=scatter_radius
+            normal_dir=(0, 0, 1), scale=0.2, tag=land_domain
         )
         # monocots.apply(terrain_inview, grass=True, selection=selection)
-        monocots.Monocots().apply(target, grass=True, selection=selection)
+        monocots.Monocots().apply(terrain_inview, grass=True, selection=selection)
         selection = density.placement_mask(
             normal_dir=(0, 0, 1),
             scale=0.2,
             select_thresh=0.55,
             tag=params.get("grass_habitats", None),
-            xy_radius=scatter_radius,
         )
         monocots.apply(target, grass=False, selection=selection)
 
-    p.run_stage("monocots", add_monocots, terrain_mesh)
+    p.run_stage("monocots", add_monocots, terrain_inview)
 
     def add_ferns(target):
-        scatter_radius = params.get("scatter_radius", None)
         selection = density.placement_mask(
             normal_dir=(0, 0, 1),
             scale=0.1,
             select_thresh=0.6,
             return_scalar=True,
             tag=land_domain,
-            xy_radius=scatter_radius,
         )
         # fern.apply(target, selection=selection)
         fern.Fern().apply(target, selection=selection)
 
-    p.run_stage("ferns", add_ferns, terrain_mesh)
+    p.run_stage("ferns", add_ferns, terrain_inview)
 
     def add_flowers(target):
-        scatter_radius = params.get("scatter_radius", None)
         selection = density.placement_mask(
             normal_dir=(0, 0, 1),
             scale=0.01,
             select_thresh=0.6,
             return_scalar=True,
             tag=land_domain,
-            xy_radius=scatter_radius,
         )
         # flowerplant.apply(target, selection=selection)
         flowerplant.Flowerplant().apply(target, selection=selection)
 
-    p.run_stage("flowers", add_flowers, terrain_mesh)
+    p.run_stage("flowers", add_flowers, terrain_inview)
 
     def add_corals(target):
         vertical_faces = density.placement_mask(
@@ -851,24 +828,11 @@ def compose_nature(output_folder, scene_seed, **params):
 
 @gin.configurable
 def populate_scene(
-    output_folder: Path,
-    scene_seed: int,
-    camera_rigs: list[bpy.types.Object],
-    populate_origin: tuple = (0, 0, 1.5),
-    **params,
+    output_folder: Path, scene_seed: int, camera_rigs: list[bpy.types.Object], **params
 ):
     p = RandomStageExecutor(scene_seed, output_folder, params)
 
     primary_cams = [rig.children[0] for rig in camera_rigs]
-
-    # Use a fixed camera at populate_origin for dist_cull so assets are placed
-    # uniformly around the scene origin regardless of where the auto camera lands.
-    origin_cam_data = bpy.data.cameras.new("origin_populate_cam")
-    origin_cam = bpy.data.objects.new("origin_populate_cam", origin_cam_data)
-    bpy.context.scene.collection.objects.link(origin_cam)
-    origin_cam.location = populate_origin
-    cam_util.adjust_camera_sensor(origin_cam)
-    populate_cams = [origin_cam]
 
     season = p.run_stage(
         "choose_season", trees.random_season, use_chance=False, default=[]
@@ -882,7 +846,7 @@ def populate_scene(
         use_chance=False,
         default=[],
         fn=lambda: placement.populate_all(
-            trees.TreeFactory, populate_cams, season=season, vis_cull=None
+            trees.TreeFactory, primary_cams, season=season, vis_cull=4
         ),
     )  # ,
     # meshing_camera=camera, adapt_mesh_method='subdivide', cam_meshing_max_dist=8))
@@ -891,7 +855,7 @@ def populate_scene(
         use_chance=False,
         default=[],
         fn=lambda: placement.populate_all(
-            rocks.BoulderFactory, populate_cams, vis_cull=None
+            rocks.BoulderFactory, primary_cams, vis_cull=3
         ),
     )  # ,
     # meshing_camera=camera, adapt_mesh_method='subdivide', cam_meshing_max_dist=8))
@@ -899,7 +863,7 @@ def populate_scene(
         "populate_bushes",
         use_chance=False,
         fn=lambda: placement.populate_all(
-            trees.BushFactory, populate_cams, adapt_mesh_method="subdivide", vis_cull=None
+            trees.BushFactory, primary_cams, vis_cull=1, adapt_mesh_method="subdivide"
         ),
     )
     p.run_stage(

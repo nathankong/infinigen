@@ -3,6 +3,7 @@
 
 # Authors: Lingjie Mei
 
+import gin  # PATCH: added for @gin.configurable on ContourFactory
 import numpy as np
 import shapely
 from numpy.random import uniform
@@ -24,14 +25,23 @@ from infinigen.core.util.random import log_uniform
 from infinigen.core.util.random import random_general as rg
 
 
+# PATCH: made gin.configurable so corner_prob/long_prob/maximal_radius can be
+# overridden via gin (e.g. ContourFactory.corner_prob=('weighted_choice',(1,'none'))).
+@gin.configurable
 class ContourFactory:
-    def __init__(self, consgraph):
+    def __init__(
+        self,
+        consgraph,
+        long_prob=("bool", 0.5),
+        corner_prob=("weighted_choice", (1, "round"), (2, "sharp"), (7, "none")),
+        maximal_radius=4,
+    ):
         self.consgraph = consgraph
         self.constants = consgraph.constants
         self.n_trials = 1000
-        self.long_prob = "bool", 0.5
-        self.corner_prob = "weighted_choice", (1, "round"), (2, "sharp"), (7, "none")
-        self.maximal_radius = 4
+        self.long_prob = long_prob
+        self.corner_prob = corner_prob
+        self.maximal_radius = maximal_radius
 
     def add_staircase(self, contour):
         x, y = contour.boundary.xy

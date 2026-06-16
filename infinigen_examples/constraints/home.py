@@ -476,7 +476,18 @@ def home_room_constraints(has_fewer_rooms=False):
     )
 
 
-def home_furniture_constraints():
+# PATCH: storage_against_wall exposed via compose_indoors overrides["storage_against_wall"].
+# When False, storage uses cu.on_floor so cabinets can be placed anywhere on the floor.
+# PATCH: unconstrained_to_wall — when True, all normally wall-constrained furniture
+# (beds, TVstands, desks, floor lamps, large plants) uses cu.on_floor instead of
+# cu.against_wall, so they are placed freely on the floor.
+# PATCH: side_obj_freestanding — when True, sidetables use cu.on_floor (placed freely
+# on the floor) instead of requiring leftright_leftright adjacency to wall furniture.
+def home_furniture_constraints(
+    storage_against_wall: bool = True,
+    unconstrained_to_wall: bool = False,
+    side_obj_freestanding: bool = False,
+):
     """Construct a constraint graph which incentivizes realistic home layouts.
 
     Result will contain both hard constraints (`constraints`) and soft constraints (`score_terms`).
@@ -511,10 +522,13 @@ def home_furniture_constraints():
     # region overall fullness
 
     furniture = obj[Semantics.Furniture].related_to(rooms, cu.on_floor)
-    wallfurn = furniture.related_to(rooms, cu.against_wall)
+    # [PATCH] unconstrained_to_wall: relax wall requirement → all normally wall-placed
+    # furniture (beds, TVstands, desks) becomes freestanding on the floor.
+    wallfurn = furniture.related_to(rooms, cu.against_wall if not unconstrained_to_wall else cu.on_floor)
 
     storage = furniture[Semantics.Storage]
-    storage_freestanding = storage.related_to(rooms, cu.against_wall)
+    # PATCH: cu.on_floor when storage_against_wall=False (freestanding cabinets).
+    storage_freestanding = storage.related_to(rooms, cu.against_wall if storage_against_wall else cu.on_floor)
 
     params = sample_home_constraint_params()
 
@@ -678,11 +692,10 @@ def home_furniture_constraints():
 
     # region PLANTS
     small_plants = obj[tableware.PlantContainerFactory].related_to(storage, cu.ontop)
-    big_plants = (
-        obj[tableware.LargePlantContainerFactory]
-        .related_to(rooms, cu.on_floor)
-        .related_to(rooms, cu.against_wall)
-    )
+    big_plants = obj[tableware.LargePlantContainerFactory].related_to(rooms, cu.on_floor)
+    # [PATCH] unconstrained_to_wall: drop wall adjacency so large plants can be placed freely.
+    if not unconstrained_to_wall:
+        big_plants = big_plants.related_to(rooms, cu.against_wall)
     constraints["plants"] = rooms.all(
         lambda r: (
             big_plants.related_to(r).count().in_range(0, 1)
@@ -744,11 +757,10 @@ def home_furniture_constraints():
     # region ALL LIGHTING RULES
 
     lights = obj[Semantics.Lighting]
-    floor_lamps = (
-        lights[lamp.FloorLampFactory]
-        .related_to(rooms, cu.on_floor)
-        .related_to(rooms, cu.against_wall)
-    )
+    floor_lamps = lights[lamp.FloorLampFactory].related_to(rooms, cu.on_floor)
+    # [PATCH] unconstrained_to_wall: drop wall adjacency so floor lamps can be placed freely.
+    if not unconstrained_to_wall:
+        floor_lamps = floor_lamps.related_to(rooms, cu.against_wall)
     constraints["lighting"] = rooms.all(
         lambda r: (
             # dont put redundant lights close to eachother (including lamps, ceiling lights, etc)
@@ -797,9 +809,14 @@ def home_furniture_constraints():
     # endregion
 
     # region SIDETABLES
-    sidetables = furniture[tables.SideTableFactory].related_to(
-        wallfurn, cu.leftright_leftright
-    )
+    # [PATCH] side_obj_freestanding: sidetables go on the floor (on_floor_freestanding
+    # stage) rather than requiring leftright adjacency to wall furniture (side_obj stage).
+    if side_obj_freestanding:
+        sidetables = furniture[tables.SideTableFactory].related_to(rooms, cu.on_floor)
+    else:
+        sidetables = furniture[tables.SideTableFactory].related_to(
+            wallfurn, cu.leftright_leftright
+        )
 
     constraints["sidetable_objects"] = rooms.all(
         lambda r: (
@@ -854,7 +871,9 @@ def home_furniture_constraints():
     constraints["bedroom"] = bedrooms.all(
         lambda r: (
             beds.related_to(r).count().in_range(1, 2)
-            * sidetables.related_to(beds.related_to(r)).count().in_range(0, 2)
+            # [PATCH] When side_obj_freestanding, sidetables use on_floor so they have no
+            # AnyRelation() to beds. Use room filter to avoid multi-stage domain ambiguity.
+            * (sidetables.related_to(r) if side_obj_freestanding else sidetables.related_to(beds.related_to(r))).count().in_range(0, 2)
             * rugs.related_to(r).count().in_range(0, 1)
             * desks.related_to(r).count().in_range(0, 1)
             * storage_freestanding.related_to(r).count().in_range(2, 5)
@@ -1210,7 +1229,9 @@ def home_furniture_constraints():
         lambda r: (
             storage_freestanding.related_to(r).count().in_range(0, 5)
             * tvstands.related_to(r).count().equals(1)
-            * sidetables.related_to(sofas.related_to(r)).count().in_range(0, 2)
+            # [PATCH] When side_obj_freestanding, sidetables use on_floor so they have no
+            # AnyRelation() to sofas. Use room filter to avoid multi-stage domain ambiguity.
+            * (sidetables.related_to(r) if side_obj_freestanding else sidetables.related_to(sofas.related_to(r))).count().in_range(0, 2)
             * desks.related_to(r).count().in_range(0, 1)
             * coffeetables.related_to(r).count().in_range(0, 1)
             * coffeetables.related_to(r).all(

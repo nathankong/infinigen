@@ -40,7 +40,6 @@ from infinigen.core.placement import camera_trajectories as cam_traj
 from infinigen.core.util import blender as butil
 from infinigen.core.util import camera as cam_util
 from infinigen.core.util import ocmesher_utils, pipeline
-from infinigen.core.util.math import int_hash
 from infinigen.core.util.imu import save_imu_tum_files
 from infinigen.core.util.test_utils import (
     import_item,
@@ -155,16 +154,7 @@ def compose_indoors(output_folder: Path, scene_seed: int, **overrides):
 
     p.run_stage("sky_lighting", lighting.sky_lighting.add_lighting, use_chance=False)
 
-    # PATCH: overrides["storage_against_wall"]=False lets cabinets be placed freestanding.
-    # PATCH: overrides["unconstrained_to_wall"]=True lets beds/TVstands/desks/lamps/plants
-    # be placed freely on the floor instead of requiring wall adjacency.
-    # PATCH: overrides["side_obj_freestanding"]=True lets sidetables be placed on the floor
-    # instead of requiring leftright adjacency to wall furniture.
-    consgraph = home_constraints.home_furniture_constraints(
-        storage_against_wall=overrides.get("storage_against_wall", True),
-        unconstrained_to_wall=overrides.get("unconstrained_to_wall", False),
-        side_obj_freestanding=overrides.get("side_obj_freestanding", False),
-    )
+    consgraph = home_constraints.home_furniture_constraints()
     consgraph_rooms = home_constraints.home_room_constraints()
     constants = consgraph_rooms.constants
 
@@ -305,51 +295,6 @@ def compose_indoors(output_folder: Path, scene_seed: int, **overrides):
         solve_stage_name("side_obj", "medium")
 
     p.run_stage("solve_medium", solve_medium, use_chance=False, default=state)
-
-    furniture_shuffle_seed = overrides.get("furniture_shuffle_seed")
-    if furniture_shuffle_seed is not None:
-        # [PATCH] Reshuffle runs AFTER solve_medium so that:
-        # (1) solve_medium always sees base furniture positions → selects the same side
-        #     objects as the base config (no missing side tables due to reshuffled layout).
-        # (2) reinit_pose on side objects re-applies StableAgainst against the large
-        #     objects' NEW positions, so side objects follow their parents correctly.
-        # Order matters: large reshuffle must complete before medium reshuffle so that
-        # side_obj reinit_pose attaches to already-repositioned large objects.
-        overrides.setdefault(
-            "solve_steps_large_reshuffle", overrides.get("solve_steps_large", 10)
-        )
-        overrides.setdefault(
-            "solve_steps_medium_reshuffle", overrides.get("solve_steps_medium", 10)
-        )
-
-        def solve_large_reshuffle():
-            solve_stage_name(
-                "on_floor_and_wall", "large_reshuffle",
-                restrict_moves=["reinit_pose", "rotate"],
-            )
-            solve_stage_name(
-                "on_floor_freestanding", "large_reshuffle",
-                restrict_moves=["reinit_pose", "rotate"],
-            )
-
-        def solve_medium_reshuffle():
-            solve_stage_name(
-                "on_wall", "medium_reshuffle",
-                restrict_moves=["reinit_pose", "rotate"],
-            )
-            solve_stage_name(
-                "on_ceiling", "medium_reshuffle",
-                restrict_moves=["reinit_pose", "rotate"],
-            )
-            solve_stage_name(
-                "side_obj", "medium_reshuffle",
-                restrict_moves=["reinit_pose", "rotate"],
-            )
-
-        overrides["solve_large_reshuffle_seed"] = int_hash((scene_seed, furniture_shuffle_seed))
-        overrides["solve_medium_reshuffle_seed"] = int_hash((scene_seed, "medium", furniture_shuffle_seed))
-        p.run_stage("solve_large_reshuffle", solve_large_reshuffle, use_chance=False)
-        p.run_stage("solve_medium_reshuffle", solve_medium_reshuffle, use_chance=False)
 
     def solve_small():
         solve_stage_name("obj_ontop_obj", "small", addition_weight_scalar=3)
